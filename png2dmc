@@ -56,7 +56,7 @@ args = parser.parse_args()
 
 if args.color_reduce != -1 and args.color_reduce <= 2:
 	parser.error("<color_reduce> must be either -1 or greater than 2!")
-if args.shortest_side < 5:
+if args.shortest_side != -1 and args.shortest_side < 5:
 	parser.error("<shortest_side> must be greater than 5!")
 
 filename_stem = "%s_DMC" % Path(args.image_png).resolve().with_suffix("")
