@@ -51,7 +51,7 @@ optional arguments:
 The simplest usage of the program is  `png2dmc image.png -1 -1`, though some advanced options are available
 and described below.
 
-The program will output five files in the directory containing the source image:
+The program will output six files in the directory containing the source image:
 1. \<imagename\>_DMC.png
    - a scaled PNG of the original image with colors that match DMC thread colors
 2. \<imagename\>_DMC_colors.txt
@@ -110,8 +110,8 @@ and can easily be copied and edited in Excel.
 *Make sure you keep the column names the same!*
 
 If you ever want to change the markers, you can copy and edit the `utils/marker_symbols_noborder.png` file. Markers
-are 11x11 squares, and **ONLY** the top left square should remain transparent. I like the three-wide format because
-it means that you can easily add markers without having to make an absurd number of new ones.
+are 11x11 squares, and **ONLY** the top left square should remain completely transparent. I like the three-wide format
+because it means that you can easily add markers without having to make an absurd number of new ones.
 
 The `--numbers_file` flag is really only there for testing purposes. If you add any letters/numbers, you'd have to
 edit the dictionary at the beginning. Because of this, **_I do not recommend using this flag_**.
