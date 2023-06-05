@@ -68,7 +68,7 @@ The program will output five files in the directory containing the source image:
 **_The most important file is #5_**. It can be opened in an image manipulation software to keep track of your progress
 while you're stitching. I put red dots over each square after I've stitched it!
 
-###Rescaling and color reduction
+### Rescaling and color reduction
 png2dmc is extremely flexible in the types of images it can process, and has built-in scaling options for shrinking 
 larger images. By default, the program will **_warn_** you that your image is a bit large if it contains more than
 22,800 pixels (a 151x151 square). You can just ignore the warning and continue on if this is okay with you!
@@ -93,7 +93,7 @@ looking) piece.
 You'll likely have to play around with these two values to get a pattern you're satisfied with. Even if you want to 
 modify the pattern that the program outputs, it gives you a nice starting point for more complex projects!
 
-###Changing the DMC index, marker file, and numbers file
+### Changing the DMC index, marker file, and numbers file
 The flags `--dmc_idx <str>`, `--marker_file <str>`, and `--numbers_file <str>` allow the user to customize the
 DMC thread library, the markers used to denote squares in the generated pattern, and the numbers/letters used 
 in the generated pattern key, respectively. Realistically, you're only ever going to use the `--dmc_idx` flag,
@@ -110,7 +110,7 @@ it means that you can easily add markers without having to make an absurd number
 The `--numbers_file` flag is really only there for testing purposes. If you add any letters/numbers, you'd have to
 edit the dictionary at the beginning. Because of this, **_I do not recommend using this flag_**.
 
-###Changing how the key is sorted
+### Changing how the key is sorted
 By default, the pattern key is sorted in ascending order by the floss number. This can be changed using the flag 
 `--key_sort count` to sort the pattern key by the number of stitches you'll make with each color.
 
