@@ -44,6 +44,7 @@ optional arguments:
                         Changes how the key is sorted (either by floss number or stitch count)
   --ignore_size_limit   bypasses the size limit and forces the program to process large images
   --no_reuse            Disables the program reusing markers and terminates the program if there are more colors than markers
+  --random_seed         Instead of using the file name as a seed, use a random seed
   --force               allows the program to overwrite files
 ```
 
@@ -56,17 +57,22 @@ The program will output five files in the directory containing the source image:
 2. \<imagename\>_DMC_colors.txt
    - a tab-delimited list of all the colors, their names, and how many stitches there are. Useful if you need to compare
   to a spreadsheet or something of that ilk
-3. \<imagename\>_DMC_key.png
-   - a key for the pattern with markers overlaid. The marker and thread number are on the left, while the stitch count
-  is on the right
-4. \<imagename\>_DMC_large.png
+3. \<imagename\>_DMC_key_count.png
+   - a key for the pattern with markers overlaid. This key is sorted by stitch count. 
+     The marker and floss number are on the left, while the stitch count is on the right
+4. \<imagename\>_DMC_key_floss.png
+   - a key for the pattern with markers overlaid. This key is sorted by floss number. 
+     The marker and floss number are on the left, while the stitch count is on the right
+5. \<imagename\>_DMC_large.png
    - a scaled PNG of the original image with colors that match DMC thread colors but each pixel is an 11x11 square
-5. \<imagename\>_DMC_markers.png
+6. \<imagename\>_DMC_markers.png
    - a scaled PNG of the original image with colors that match DMC thread colors. Each pixel is an 11x11 square and
   a marker identifying the color has been placed within each pixel. Cross-reference with the key file!
 
-**_The most important file is #5_**. It can be opened in an image manipulation software to keep track of your progress
-while you're stitching. I put red dots over each square after I've stitched it!
+**_The most important file is #6_**. It can be opened in an image manipulation software to keep track of your progress
+while you're stitching. I put red dots over each square after I've stitched it! Because the program uses the file name
+to seed the random number generator, runs with the same options will produce exactly the same output, with the colors
+represented by the same markers.
 
 ### Rescaling and color reduction
 png2dmc is extremely flexible in the types of images it can process, and has built-in scaling options for shrinking 
@@ -122,6 +128,10 @@ there are more than 74. I've solved this by simply reusing markers. If you aren'
 use this flag and the program will terminate if the pattern needs to contain redundant markers. This can be solved by
 reducing the color palette further, or by just using redundant markers. It doesn't bother me, but I thought some
 people might want to have the option!
+
+The `--random_seed` flag seeds the random number generator with a random seed instead of using the file name as a seed. 
+This is useful if you don't like the markers that are being chosen and want to switch it up. This will make the output
+of the program impossible to reproduce!
 
 The `--force` flag simply allows the program to overwrite files. I typically use it all the time, but it's there to 
 make sure users don't accidentally overwrite projects.
