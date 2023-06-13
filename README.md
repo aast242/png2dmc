@@ -6,13 +6,18 @@ for the most recent, fully-tested version of png2dmc.
 # Dependencies
 - [Pillow (>= 9.2)](https://pillow.readthedocs.io/en/stable/installation.html)
 - [numpy (>= 1.20.0)](https://numpy.org/install/)
+- [scikit-learn (>= 1.2.2)](https://scikit-learn.org/stable/install.html)
+- [scikit-image (>= 0.21.0)](https://scikit-image.org/docs/stable/user_guide/install.html)
 
-Pillow and numpy are both used by png2dmc to process images. Detailed instructions on how to install both can be
-found linked above, however they can be very simply installed using pip: 
+All the dependencies are used by png2dmc to process images or do image-related math.
+Detailed instructions on how to install them can be found linked above,
+however they can be very simply installed using pip: 
 
 ```
 pip3 install --upgrade Pillow
 pip3 install --upgrade numpy
+pip3 install --upgrade scikit-learn
+pip3 install --upgrade scikit-image
 ```
 
 # Usage
@@ -45,6 +50,7 @@ optional arguments:
   --ignore_size_limit   bypasses the size limit and forces the program to process large images
   --no_reuse            Disables the program reusing markers and terminates the program if there are more colors than markers
   --random_seed         Instead of using the file name as a seed, use a random seed
+  --random_quantize     uses the old method to quantize colors (not K-means)
   --force               allows the program to overwrite files
 ```
 
@@ -132,6 +138,13 @@ people might want to have the option!
 The `--random_seed` flag seeds the random number generator with a random seed instead of using the file name as a seed. 
 This is useful if you don't like the markers that are being chosen and want to switch it up. This will make the output
 of the program impossible to reproduce!
+
+The `--random_quantize` flag makes the program use the older version of color quantization 
+([using the pillow 'convert' function](https://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.Image.convert)).
+The program now uses a K-means method of color quantization,
+as detailed [here](https://scikit-learn.org/stable/auto_examples/cluster/plot_color_quantization.html). 
+The K-means method also converts images into LAB color space, heavily inspired by swirlyclouds' 
+[EmbroideryPatternScript repo](https://github.com/swirlyclouds/EmbroideryPatternScript).
 
 The `--force` flag simply allows the program to overwrite files. I typically use it all the time, but it's there to 
 make sure users don't accidentally overwrite projects.

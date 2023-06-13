@@ -9,6 +9,9 @@ __maintainer__ = "Alex Stewart"
 
 import argparse
 from pathlib import Path
+from sklearn.cluster import KMeans
+from sklearn.utils import shuffle
+from skimage import io, color
 import numpy as np
 from PIL import Image
 import random
@@ -27,7 +30,7 @@ NUMBERS_ORDER = {"0": 0, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7,
 PROG_LOCATION = Path(__file__).absolute().parent
 
 parser = argparse.ArgumentParser(description="Program: png2dmc\n"
-											 "Version: 1.0\n",
+											 "Version: 1.1\n",
 								 formatter_class=argparse.RawDescriptionHelpFormatter,
 								 usage='%(prog)s <image_png> <shortest_side> <color_reduce> [options]')
 parser.add_argument("image_png", help='The image to be converted into a cross-stitch pattern', type=str)
@@ -48,16 +51,19 @@ parser.add_argument("--ignore_size_limit", action='store_true',
 parser.add_argument("--no_reuse", action='store_true',
 					help="Disables the program reusing markers and terminates the program if there are more colors"
 						 " than markers")
+# parser.add_argument("--min_stitch", type=int, default=0,
+# 					help="minimum number of stitches before it is merged with the closest color")
 parser.add_argument("--random_seed", action='store_true',
 					help="Instead of using the file name as a seed, use a random seed")
-
+parser.add_argument("--random_quantize", help="uses the old method to quantize colors (not K-means)",
+					action='store_true')
 parser.add_argument("--force", help="allows the program to overwrite files", action='store_true')
 args = parser.parse_args()
 
 if args.color_reduce != -1 and args.color_reduce <= 2:
 	parser.error("<color_reduce> must be either -1 or greater than 2!")
 if args.shortest_side != -1 and args.shortest_side < 5:
-	parser.error("<shortest_side> must be greater than 5!")
+	parser.error("<shortest_side> must be either -1 or greater than 5!")
 
 filename_stem = "%s_DMC" % Path(args.image_png).resolve().with_suffix("")
 # seed the random number generator so that the same named image file will generate the key in the same order
@@ -150,7 +156,112 @@ def import_pattern(img_file):
 	return pattern_pixels
 
 
-def match_pix_to_dmc(pixel_array, dmc_int_list, dmc_dic):
+def find_and_blot_transparent_pixels(img_array):
+	transparents = set()
+	for row in range(0, len(img_array)):
+		for col in range(0, len(img_array[row])):
+			if img_array[row][col][3] == 0:
+				transparents.add(f"{row}_{col}")
+
+				# removes the color that might be preset in the transparent pixel
+				img_array[row][col][0] = 0
+				img_array[row][col][1] = 0
+				img_array[row][col][2] = 0
+
+	return transparents
+
+
+# uses k-means to reduce the colors present in an image and also converts the image to LAB color space
+# Inspired heavily by https://github.com/swirlyclouds/EmbroideryPatternScript and
+# https://scikit-learn.org/stable/auto_examples/cluster/plot_color_quantization.html
+#
+# Author and License from swirlyclouds EmbroideryPatternScript
+# Author: Swirly Clouds
+#
+# License: MIT License
+#
+# Authors and License from the scikit tutorial:
+# Authors: Robert Layton <robertlayton@gmail.com>
+#          Olivier Grisel <olivier.grisel@ensta.org>
+#          Mathieu Blondel <mathieu@mblondel.org>
+#
+# License: BSD 3 clause
+def kmeans_import(img_file):
+	global filename_stem
+	# load image and convert to LAB space
+	pattern_image = io.imread(img_file)
+
+	if len(pattern_image[0][0]) == 4:
+		has_transparency = True
+	else:
+		has_transparency = False
+
+	if has_transparency:
+		t_pix = find_and_blot_transparent_pixels(pattern_image)
+		pattern_image = color.rgba2rgb(pattern_image)
+	else:
+		t_pix = set()
+
+	pattern_image = color.rgb2lab(pattern_image)
+	orig_dims = pattern_image.shape[:2]
+
+	# Transform LAB space image to 2D numpy array
+	print("flattening image")
+	pattern_image = pattern_image.reshape(orig_dims[0] * orig_dims[1], 3)
+
+	# fit the KMeans model to a subset of the data
+	k_val = args.color_reduce
+	if k_val == -1:
+		# k_val = 256
+		k_val = 500
+
+	filename_stem = "%s_kmeansCR%s" % (filename_stem, k_val)
+
+	if pattern_image.shape[0] < 10000:
+		sample_val = pattern_image.shape[0]
+	else:
+		sample_val = 10000
+
+	image_subset = shuffle(pattern_image, random_state=0, n_samples=sample_val)
+
+	print("Fitting Kmeans model on a subset of the image")
+	kmeans_assign = KMeans(n_clusters=k_val, n_init=20, random_state=0)
+	kmeans_assign.fit(image_subset)
+
+	print("predicting the rest of the image with the model")
+	km_whole_image = kmeans_assign.predict(pattern_image)
+
+	pattern_image = kmeans_assign.cluster_centers_[km_whole_image].reshape(orig_dims[0], orig_dims[1], -1)
+	pattern_image = color.lab2rgb(pattern_image)
+
+	pattern_image = np.ndarray.tolist(pattern_image)
+	for row in range(0, len(pattern_image)):
+		for col in range(0, len(pattern_image[row])):
+			pattern_image[row][col][0] = int(round(pattern_image[row][col][0] * 255.0))
+			pattern_image[row][col][1] = int(round(pattern_image[row][col][1] * 255.0))
+			pattern_image[row][col][2] = int(round(pattern_image[row][col][2] * 255.0))
+
+			if f'{row}_{col}' in t_pix:
+				pattern_image[row][col].append(0)
+			else:
+				pattern_image[row][col].append(255)
+			np.array(pattern_image[row][col])
+		np.array(pattern_image[row])
+	pattern_image = np.array(pattern_image).astype(np.uint8)
+
+	# if the image isn't supposed to be scaled, shrink ratio is 1
+	if args.shortest_side == -1:
+		shrink_ratio = 1
+	else:
+		shrink_ratio = args.shortest_side / min(orig_dims)
+	# rescale the image, even up!
+	resized_image = np.array(Image.fromarray(pattern_image).resize(
+		(int(orig_dims[1] * shrink_ratio), int(orig_dims[0] * shrink_ratio)), Image.Resampling.NEAREST))
+
+	return resized_image
+
+
+def match_pix_to_dmc(pixel_array, dmc_int_list, dmc_dic, floss_to_rgb):
 	dmc_colors_needed = {}
 	for height in range(0, len(pixel_array)):
 		for length in range(0, len(pixel_array[height])):
@@ -167,6 +278,15 @@ def match_pix_to_dmc(pixel_array, dmc_int_list, dmc_dic):
 					dmc_colors_needed.setdefault(dmc_dic["_".join(str(i) for i in curr_dmc_closest)], 1)
 
 	stitch_count_dict = dmc_colors_needed
+	# merge low-count colors
+	# TODO: finish this
+	#low_count_colors = [floss_to_rgb[i] for i in dmc_colors_needed.keys() if dmc_colors_needed[i] <= args.min_stitch]
+	#high_count_colors = [floss_to_rgb[i] for i in dmc_colors_needed.keys() if dmc_colors_needed[i] > args.min_stitch]
+	#for low_ct in low_count_colors:
+		#print(dmc_dic["_".join(str(i) for i in low_ct)])
+		#print(dmc_dic["_".join(str(i) for i in closest_color(high_count_colors, low_ct)[0])])
+	#	pass
+
 	dmc_colors_needed = list(dmc_colors_needed.keys())
 	for i in range(0, len(dmc_colors_needed)):
 		try:
@@ -174,6 +294,9 @@ def match_pix_to_dmc(pixel_array, dmc_int_list, dmc_dic):
 		except ValueError:
 			pass
 	dmc_colors_needed.sort(key=lambda i: (isinstance(i, str), i))
+
+
+
 	return dmc_colors_needed, stitch_count_dict
 
 
@@ -313,6 +436,7 @@ def shrink_and_colorreduce(np_pixel_array):
 		shrink_ratio = 1
 	else:
 		shrink_ratio = args.shortest_side / min(img_dimensions)
+
 	# rescale the image, even up!
 	resized_image = Image.fromarray(np_pixel_array).resize(
 		(int(img_dimensions[1] * shrink_ratio), int(img_dimensions[0] * shrink_ratio)), Image.Resampling.NEAREST)
@@ -341,14 +465,16 @@ if __name__ == '__main__':
 	dmc_num_to_rgb = {v[0]: [int(v[2]), int(v[3]), int(v[4])] for v in dmc_list}
 	dmc_ints = [[int(v[2]), int(v[3]), int(v[4])] for v in dmc_list]
 
-	pattern_img = import_pattern(args.image_png)
+	if args.random_quantize:
+		pattern_img = import_pattern(args.image_png)
+	else:
+		pattern_img = kmeans_import(args.image_png)
 
 	# check to make sure the program isn't overwriting any files before executing unless --force has been given
 	if not args.force:
 		overwrite_check()
 
-	dmc_needed, stitch_count = match_pix_to_dmc(pattern_img, dmc_ints, dmc_dict)
-
+	dmc_needed, stitch_count = match_pix_to_dmc(pattern_img, dmc_ints, dmc_dict, dmc_num_to_rgb)
 
 	if len(dmc_needed) > marker_count and not args.no_reuse:
 		print("\nWARNING: %s colors are needed and there are %s markers!" % (len(dmc_needed), marker_count))
