@@ -30,7 +30,7 @@ png2dmc is run via the script 'png2dmc', found in the base installation director
 usage: png2dmc <image_png> <shortest_side> <color_reduce> [options]
 
 Program: png2dmc
-Version: 1.0
+Version: 1.1
 
 positional arguments:
   image_png             The image to be converted into a cross-stitch pattern
@@ -51,6 +51,7 @@ optional arguments:
   --no_reuse            Disables the program reusing markers and terminates the program if there are more colors than markers
   --random_seed         Instead of using the file name as a seed, use a random seed
   --random_quantize     uses the old method to quantize colors (not K-means)
+  --euc_dmc             Matches pixels in the image using the shortest euclidean distance in RGB space.
   --force               allows the program to overwrite files
 ```
 
@@ -145,6 +146,15 @@ The program now uses a K-means method of color quantization,
 as detailed [here](https://scikit-learn.org/stable/auto_examples/cluster/plot_color_quantization.html). 
 The K-means method also converts images into LAB color space, heavily inspired by swirlyclouds' 
 [EmbroideryPatternScript repo](https://github.com/swirlyclouds/EmbroideryPatternScript).
+
+The `--euc_dmc` flag makes the program match colored pixels to DMC thread colors using the euclidean distance between
+the colors in RGB space. By default, the program matches colors in the more perceptually uniform LAB space using the
+shortest distance from the Color Measurement Committee of the Society of Dyers and Colourists
+(more info [here](https://scikit-image.org/docs/stable/api/skimage.color.html#skimage.color.deltaE_cmc)). Using 
+this option is here for legacy purposes. The LAB conversion takes longer 
+(for a 109x109 image with 500 colors: LAB is ~90 seconds, RGB is ~70 seconds), but it's not an absurd amount of time,
+and I think the patterns are improved. If you want, you can create a pattern with and without this flag and see
+which one you prefer!
 
 The `--force` flag simply allows the program to overwrite files. I typically use it all the time, but it's there to 
 make sure users don't accidentally overwrite projects.

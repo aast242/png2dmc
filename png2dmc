@@ -52,12 +52,12 @@ parser.add_argument("--ignore_size_limit", action='store_true',
 parser.add_argument("--no_reuse", action='store_true',
 					help="Disables the program reusing markers and terminates the program if there are more colors"
 						 " than markers")
-# parser.add_argument("--min_stitch", type=int, default=0,
-# 					help="minimum number of stitches before it is merged with the closest color")
 parser.add_argument("--random_seed", action='store_true',
 					help="Instead of using the file name as a seed, use a random seed")
 parser.add_argument("--random_quantize", help="uses the old method to quantize colors (not K-means)",
 					action='store_true')
+parser.add_argument("--euc_dmc", action='store_true',
+					help="Matches pixels in the image using the shortest euclidean distance in RGB space.")
 parser.add_argument("--force", help="allows the program to overwrite files", action='store_true')
 args = parser.parse_args()
 
@@ -105,7 +105,7 @@ def parse_dmc_list(dmc_txt):
 	return color_vals, color_dict
 
 
-# color is a three element list [R, G, B]
+# search color is a three element list [R, G, B]
 # DMC_array is a list of all the DMC colors [[R,G,B], [R,G,B], ..., [R,G,B]]
 # from https://stackoverflow.com/questions/54242194/python-find-the-closest-color-to-a-color-from-giving-list-of-colors
 def closest_color(dmc_array, search_color):
@@ -115,6 +115,91 @@ def closest_color(dmc_array, search_color):
 	index_of_smallest = np.where(distances == np.amin(distances))
 	smallest_distance = ref_colors[index_of_smallest]
 	return smallest_distance
+
+
+# search color is a three element list [L, a, b]
+# DMC_array is a list of all the DMC colors [[L, a, b], [L, a, b], ..., [L, a, b]]
+# after some testing, it seems like the cmc is the best, followed by ciede2000, then 94 is the worst
+def closest_color_cie2000(dmc_array, search_color):
+	#k1 = 0.048
+	#k2 = 0.014
+
+	#c_1 = np.sqrt((search_color[1] ** 2) + (search_color[2] ** 2))
+	#sc = 1 + (k1 * c_1)
+	#sh = 1 + (k2 * c_1)
+
+	# COLOR 1 is the search color
+	# COLOR 2 is the dmc color
+	# color_distances = [color.deltaE_ciede2000(search_color, dmc_color, kL=2, kC=sc, kH=sh) for dmc_color in dmc_array]
+	color_distances = [color.deltaE_cmc(search_color, dmc_color, kL=1, kC=1) for dmc_color in dmc_array]
+	# color_distances = [color.deltaE_ciede94(search_color, dmc_color, kL=2, k1=k1, k2=k2) for dmc_color in dmc_array]
+	smallest_dist_idx = list(np.where(color_distances == np.amin(color_distances))[0])[0]
+	return smallest_dist_idx
+
+
+def image_to_lab_closest(image_array, dmc_rgbs, dmc_dic):
+	global filename_stem
+	# convert the rgb dmc list to LAB colorspace
+	lab_dmc = color.rgb2lab(np.array(dmc_rgbs) / 255.0)
+
+	# get the unique colors in the reduced image
+	unique_colors = np.unique(image_array.reshape(-1, image_array.shape[2]), axis=0)
+	unique_colors_rgb = unique_colors
+	unique_colors = color.rgb2lab(color.rgba2rgb(unique_colors, background=[0, 0, 0]))
+	unique_colors_dmc = []
+	print(f"Finding the closest DMC colors in LAB space for {len(unique_colors)} colors...")
+	cnt = 0
+	for uniq in unique_colors:
+		unique_colors_dmc.append(closest_color_cie2000(lab_dmc, uniq))
+		cnt += 1
+		if cnt % 100 == 0:
+			print(f"Finished processing {cnt} colors!")
+	print(f"Finished processing all {len(unique_colors)} colors!")
+
+	image_to_dmc = {}
+	for img_color in range(0, len(unique_colors_rgb)):
+		image_to_dmc['%s_%s_%s' % (unique_colors_rgb[img_color][0],
+								   unique_colors_rgb[img_color][1],
+								   unique_colors_rgb[img_color][2])] = dmc_rgbs[unique_colors_dmc[img_color]]
+	#print(len(image_to_dmc))
+	#print(image_to_dmc)
+	dmc_colors_needed = {}
+	for height in range(0, len(image_array)):
+		for length in range(0, len(image_array[height])):
+			if image_array[height, length, 3] < ALPHA_CUTOFF:
+				image_array[height, length, 3] = 0
+			else:
+				image_array[height, length, 3] = 255
+				try:
+					curr_dmc_closest = list(image_to_dmc["%s_%s_%s" % (image_array[height][length][0],
+																	   image_array[height][length][1],
+																	   image_array[height][length][2])])
+				except KeyError:
+					print(image_array[height, length])
+					print(height, length)
+					print("what")
+					exit()
+				image_array[height][length][0] = curr_dmc_closest[0]
+				image_array[height][length][1] = curr_dmc_closest[1]
+				image_array[height][length][2] = curr_dmc_closest[2]
+				try:
+					dmc_colors_needed[dmc_dic["_".join(str(i) for i in curr_dmc_closest)]] += 1
+				except KeyError:
+					dmc_colors_needed.setdefault(dmc_dic["_".join(str(i) for i in curr_dmc_closest)], 1)
+
+	stitch_count_dict = dmc_colors_needed
+
+	dmc_colors_needed = list(dmc_colors_needed.keys())
+	for i in range(0, len(dmc_colors_needed)):
+		try:
+			dmc_colors_needed[i] = int(dmc_colors_needed[i])
+		except ValueError:
+			pass
+	dmc_colors_needed.sort(key=lambda i: (isinstance(i, str), i))
+
+	filename_stem = "%s_LABmatch" % filename_stem
+
+	return dmc_colors_needed, stitch_count_dict
 
 
 def import_png(img_file):
@@ -170,6 +255,9 @@ def find_and_blot_transparent_pixels(img_array):
 				img_array[row][col][1] = 0
 				img_array[row][col][2] = 0
 				img_array[row][col][3] = 0
+			# if the pixel is MOSTLY opaque, make it completely opaque
+			else:
+				img_array[row][col][3] = 255
 
 	return transparents
 
@@ -238,6 +326,7 @@ def kmeans_import(img_file):
 	pattern_image = kmeans_assign.cluster_centers_[km_whole_image].reshape(orig_dims[0], orig_dims[1], -1)
 	pattern_image = color.lab2rgb(pattern_image)
 
+	# convert back to rgba so that the program can scale things down
 	pattern_image = np.ndarray.tolist(pattern_image)
 	for row in range(0, len(pattern_image)):
 		for col in range(0, len(pattern_image[row])):
@@ -283,14 +372,6 @@ def match_pix_to_dmc(pixel_array, dmc_int_list, dmc_dic, floss_to_rgb):
 					dmc_colors_needed.setdefault(dmc_dic["_".join(str(i) for i in curr_dmc_closest)], 1)
 
 	stitch_count_dict = dmc_colors_needed
-	# merge low-count colors
-	# TODO: finish this
-	#low_count_colors = [floss_to_rgb[i] for i in dmc_colors_needed.keys() if dmc_colors_needed[i] <= args.min_stitch]
-	#high_count_colors = [floss_to_rgb[i] for i in dmc_colors_needed.keys() if dmc_colors_needed[i] > args.min_stitch]
-	#for low_ct in low_count_colors:
-		#print(dmc_dic["_".join(str(i) for i in low_ct)])
-		#print(dmc_dic["_".join(str(i) for i in closest_color(high_count_colors, low_ct)[0])])
-	#	pass
 
 	dmc_colors_needed = list(dmc_colors_needed.keys())
 	for i in range(0, len(dmc_colors_needed)):
@@ -299,8 +380,6 @@ def match_pix_to_dmc(pixel_array, dmc_int_list, dmc_dic, floss_to_rgb):
 		except ValueError:
 			pass
 	dmc_colors_needed.sort(key=lambda i: (isinstance(i, str), i))
-
-
 
 	return dmc_colors_needed, stitch_count_dict
 
@@ -479,7 +558,10 @@ if __name__ == '__main__':
 	if not args.force:
 		overwrite_check()
 
-	dmc_needed, stitch_count = match_pix_to_dmc(pattern_img, dmc_ints, dmc_dict, dmc_num_to_rgb)
+	if args.euc_dmc:
+		dmc_needed, stitch_count = match_pix_to_dmc(pattern_img, dmc_ints, dmc_dict, dmc_num_to_rgb)
+	else:
+		dmc_needed, stitch_count = image_to_lab_closest(pattern_img, dmc_ints, dmc_dict)
 
 	if len(dmc_needed) > marker_count and not args.no_reuse:
 		print("\nWARNING: %s colors are needed and there are %s markers!" % (len(dmc_needed), marker_count))
