@@ -4,7 +4,7 @@ See the [latest release](https://github.com/aast242/png2dmc/releases)
 for the most recent, fully-tested version of png2dmc.
 
 # Example program runs
-Here's an example of how well the program works with various options on a simple picture of a cave salamander (Eurycea lucifuga).
+Here's an example of how well the program works with various options on a simple picture of a cave salamander (_Eurycea lucifuga_).
 The defualt operation of the program is in the far right column (k-means quantization and LAB matching).
 
 ![Cavesalamander_comp](https://github.com/aast242/png2dmc/assets/85575864/dd6fea2d-52ea-4573-87a1-a69bff5eea8d)
