@@ -65,6 +65,8 @@ if args.color_reduce != -1 and args.color_reduce <= 2:
 	parser.error("<color_reduce> must be either -1 or greater than 2!")
 if args.shortest_side != -1 and args.shortest_side < 5:
 	parser.error("<shortest_side> must be either -1 or greater than 5!")
+if args.random_quantize and args.color_reduce != -1 and args.color_reduce > 256:
+	parser.error("With --random_quantize, <color_reduce> must be either -1 or within [3, 256]")
 
 filename_stem = "%s_DMC" % Path(args.image_png).resolve().with_suffix("")
 # seed the random number generator so that the same named image file will generate the key in the same order
@@ -72,6 +74,24 @@ if args.random_seed:
 	random.seed()
 else:
 	random.seed(a=str(Path(filename_stem).name))
+
+# START FILENAME CHANGES
+# if the image is being randomly quantized, change the filepath to reflect the color reduction
+if args.random_quantize and args.color_reduce != -1:
+	filename_stem = "%s_CR%s" % (filename_stem, args.color_reduce)
+# if the image is being k-means quantized, indicate the level
+elif not args.random_quantize:
+	if args.color_reduce == -1:
+		filename_stem = "%s_kmeansCR%s" % (filename_stem, 500)
+	else:
+		filename_stem = "%s_kmeansCR%s" % (filename_stem, args.color_reduce)
+# indicate which DMC matching method was used
+if args.euc_dmc:
+	filename_stem = "%s_RGBmatch" % filename_stem
+else:
+	filename_stem = "%s_LABmatch" % filename_stem
+# END FILENAME CHANGES
+
 
 if True in [Path(filename_stem).name in i for i in os.listdir(str(Path(filename_stem).parent))] and not args.force:
 	print("\nWARNING: there are files in the output directory that could potentially be overwritten!")
@@ -138,7 +158,6 @@ def closest_color_cie2000(dmc_array, search_color):
 
 
 def image_to_lab_closest(image_array, dmc_rgbs, dmc_dic):
-	global filename_stem
 	# convert the rgb dmc list to LAB colorspace
 	lab_dmc = color.rgb2lab(np.array(dmc_rgbs) / 255.0)
 
@@ -196,8 +215,6 @@ def image_to_lab_closest(image_array, dmc_rgbs, dmc_dic):
 		except ValueError:
 			pass
 	dmc_colors_needed.sort(key=lambda i: (isinstance(i, str), i))
-
-	filename_stem = "%s_LABmatch" % filename_stem
 
 	return dmc_colors_needed, stitch_count_dict
 
@@ -278,7 +295,6 @@ def find_and_blot_transparent_pixels(img_array):
 #
 # License: BSD 3 clause
 def kmeans_import(img_file):
-	global filename_stem
 	# load image and convert to LAB space
 	pattern_image = io.imread(img_file)
 
@@ -306,8 +322,6 @@ def kmeans_import(img_file):
 	if k_val == -1:
 		# k_val = 256
 		k_val = 500
-
-	filename_stem = "%s_kmeansCR%s" % (filename_stem, k_val)
 
 	if pattern_image.shape[0] < 10000:
 		sample_val = pattern_image.shape[0]
@@ -509,7 +523,6 @@ def make_key(marker_dictionary, dmc_color_to_rgb, stitch_count_dict, sort_type):
 
 # shrinks and reduces the color palettes of large images
 def shrink_and_colorreduce(np_pixel_array):
-	global filename_stem
 	# get the shape of the image
 	img_dimensions = np_pixel_array.shape[:2]
 	# get the number of colors that the image will be reduced to
@@ -530,7 +543,6 @@ def shrink_and_colorreduce(np_pixel_array):
 		color_reduced = np.array(
 			resized_image.convert("P", palette=Image.Palette.ADAPTIVE, colors=num_colors).convert("RGBA"))
 		# update the file name
-		filename_stem = "%s_CR%s" % (filename_stem, num_colors)
 	else:
 		color_reduced = np.array(resized_image)
 
