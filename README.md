@@ -3,6 +3,20 @@ A python program to convert images (not just PNGs!) into DMC thread cross-stitch
 See the [latest release](https://github.com/aast242/png2dmc/releases) 
 for the most recent, fully-tested version of png2dmc.
 
+# Example program runs
+Here's an example of how well the program works with various options on a simple picture of a cave salamander (Eurycea lucifuga).
+The defualt operation of the program is in the far right column (k-means quantization and LAB matching).
+
+![Cavesalamander_comp](https://github.com/aast242/png2dmc/assets/85575864/dd6fea2d-52ea-4573-87a1-a69bff5eea8d)
+
+# An example pattern and key
+Here's a pattern from the above example. This one is the 50 color one with default
+parameters (bottom right in the example). In the key, the floss number is next to the marker, and
+the number of stitches in that color is after the dividing pipe.
+
+![example_pattern](https://github.com/aast242/png2dmc/assets/85575864/3a35a6c3-a410-421b-8b54-d8a07e764ab9)
+
+
 # Dependencies
 - [Pillow (>= 9.2)](https://pillow.readthedocs.io/en/stable/installation.html)
 - [numpy (>= 1.20.0)](https://numpy.org/install/)
